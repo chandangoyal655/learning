@@ -6,3 +6,4 @@
 - MySQL
 - Djnago Framework
 - OpenAI
+- ChatGpt
