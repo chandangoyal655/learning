@@ -1,0 +1,58 @@
+<html>
+  <head>
+    <title>responsive-webpage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      .left {
+        background-color: #0d2d47;
+        padding: 20px;
+        float: left;
+        width: 20%;
+      }
+
+      .main {
+        background-color: #3f1111;
+        padding: 20px;
+        float: left;
+        width: 60%;
+      }
+
+      .right {
+        background-color: #3ccc97;
+        padding: 20px;
+        float: left;
+        width: 20%;
+      }
+
+      @media screen and (max-width: 800px) {
+        .left,
+        .main,
+        .right {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Media Queries</h2>
+    <p>Resize the browser window.</p>
+
+    <p>Make sure you reach the breakpoint at 800px when resizing this frame.</p>
+
+    <div class="left">
+      <p>Left bar</p>
+    </div>
+
+    <div class="main">
+      <p>Main bar</p>
+    </div>
+
+    <div class="right">
+      <p>Right bar</p>
+    </div>
+  </body>
+</html>
