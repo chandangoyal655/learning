@@ -1,121 +1,132 @@
-.header {
-  background-color: cornflowerblue;
-  border: 2px solid black;
-  margin-bottom: 5px;
+.page-header {
+  text-align: center;
+  padding: 40px 20px;
+  background-color: blue;
+  margin-bottom: 2px;
+}
+.main-title {
+  font-size: 36px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 10px;
+}
+.subtitle {
+  font-size: 18px;
   color: white;
 }
-.tcolor {
+.section-text-color {
+  margin-bottom: 2px;
   border: 1px solid black;
-  margin-bottom: 5px;
 }
-h3 {
-  text-decoration: underline;
-  text-align: center;
-  margin-bottom: 5px;
-}
-.tallign {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.tdecor {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.ttransfom {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.tspace {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.ff {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.webfonts {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-.fss {
-  border: 1px solid black;
-  margin-bottom: 5px;
-}
-#p1 {
-  color: red;
-}
-#p2 {
-  color: #00ff00;
-}
-#p3 {
-  color: rgb(0, 0, 255);
-}
-#p5 {
+h2 {
   text-align: center;
 }
-#p6 {
+.color-name {
+  color: brown;
+}
+.color-hex {
+  color: #00ffff;
+}
+.color-rgb {
+  color: rgb(0, 0, 0);
+}
+.section-text-alignment {
+  border: 1px solid black;
+  margin-bottom: 2px;
+}
+.align-center {
+  text-align: center;
+}
+.align-right {
   text-align: right;
 }
-#p7 {
+.align-justify {
   text-align: justify;
 }
-#p8 {
+.section-text-decoration {
+  border: 1px solid black;
+  margin-bottom: 2px;
+}
+.underline {
   text-decoration: underline;
 }
-#p10 {
-  text-decoration: overline;
-}
-#p9 {
+.line-through {
   text-decoration: line-through;
 }
-#p11 {
-  text-transform: lowercase;
+.overline {
+  text-decoration: overline;
 }
-#p12 {
+.section-text-transform {
+  border: 1px solid black;
+  margin: 2px;
+}
+.uppercase {
   text-transform: uppercase;
 }
-#p13 {
+.lowercase {
+  text-transform: lowercase;
+}
+.capitalize {
   text-transform: capitalize;
 }
-#p14 {
-  word-spacing: 20px;
+.section-text-spacing {
+  border: 1px solid black;
+  margin-bottom: 2px;
 }
-#p15 {
-  font-family: fantasy;
+.spacing-example {
+  word-spacing: 10px;
 }
-#p16 {
-  font-family: sans-serif;
+.section-font-family {
+  border: 1px solid black;
+  margin-bottom: 2px;
 }
-#p17 {
-  font-family: arial;
+.font-heading {
+  font-family: cursive;
 }
-#p18 {
+.font-body {
   font-family: verdana;
 }
-#p19 {
-  font-family: "Times New Roman";
+.section-web-safe-fonts {
+  border: 1px solid black;
+  margin-bottom: 2px;
 }
-#p20 {
-  font-family: courier new;
+.arial {
+  font-family: arial;
 }
-#p22 {
-  font-style: italic;
+.verdana {
+  font-family: verdana;
 }
-#p21 {
+.times {
+  font-family: times new roman;
+}
+.courier {
+  font-family: courier;
+}
+.section-font-style-size {
+  border: 1px solid black;
+  margin-bottom: 2px;
+}
+.normal-text {
   font-style: normal;
 }
-#p23 {
+.italic-text {
+  font-style: italic;
+}
+.oblique-text {
   font-style: oblique;
 }
-#p24 {
+.size-px {
   font-size: 20px;
 }
-#p25 {
+.size-em {
   font-size: 2em;
 }
-#p26 {
-  font-size: 3rem;
+.size-rem {
+  font-size: 2rem;
 }
-#p27 {
-  font-size: 80%;
+.size-percent {
+  font-size: 70%;
+}
+.section-google-font {
+  border: 1px solid black;
 }
