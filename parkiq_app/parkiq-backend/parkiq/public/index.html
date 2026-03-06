@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ParkIQ — Smart Parking System</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;--surface:#f8f8f8;--surface2:#f0f0f0;
+  --border:#e0e0e0;--accent:#111111;--accent2:#444444;
+  --text:#111111;--muted:#888888;
+  --taken:#cc2222;--free:#111111;--gold:#b8860b;--blue:#1a4fa0;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,0,0,.05)1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05)1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+
+.screen{display:none;position:relative;z-index:1;}
+.screen.active{display:block;}
+#login-screen.active,#slotdesc-screen.active,#confirm-screen.active{display:grid;}
+#login-screen,#confirm-screen{min-height:100vh;place-items:center;}
+#slotdesc-screen{min-height:100vh;place-items:start;}
+
+/* ── SHARED HEADER ── */
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid var(--border);position:relative;z-index:10;gap:12px;}
+.logo{font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:#111111;letter-spacing:2px;white-space:nowrap;}
+.logo span{color:var(--text);}
+.progress-bar{display:flex;align-items:center;gap:8px;font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);}
+.pb-step{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:2px solid var(--border);font-size:10px;font-weight:700;transition:all .3s;}
+.pb-step.done{background:#111111;border-color:#111111;color:#ffffff;}
+.pb-step.active{border-color:#111111;color:#111111;}
+.pb-line{width:24px;height:2px;background:var(--border);border-radius:2px;}
+.pb-line.done{background:#111111;}
+.student-badge{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);}
+.student-badge strong{color:var(--text);}
+.student-badge .dot{width:7px;height:7px;border-radius:50%;background:#111111;animation:pulse 2s infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.4);}}
+
+/* ── ROLE TAGS ── */
+.role-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;font-family:'Space Mono',monospace;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+.role-tag.student {background:rgba(0,0,0,.07);color:#111111;border:1px solid rgba(0,0,0,.2);}
+.role-tag.staff{background:rgba(26,79,160,.1);color:var(--blue); border:1px solid rgba(26,79,160,.3);}
+.role-tag.dean {background:rgba(184,134,11,.1); color:var(--gold);border:1px solid rgba(184,134,11,.3);}
+
+/* ══════════════════════════════
+   LOGIN SCREEN
+══════════════════════════════ */
+.login-card{width:430px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:44px 40px;position:relative;overflow:hidden;}
+.login-card::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.06)0%,transparent 70%);pointer-events:none;}
+.login-title{font-size:30px;font-weight:800;margin-bottom:4px;}
+.login-title em{color:#111111;font-style:normal;}
+.login-sub{color:var(--muted);font-size:13px;margin-bottom:22px;}
+.role-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:9px;font-family:'Space Mono',monospace;}
+.role-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;}
+.role-card{padding:13px 8px;border:2px solid var(--border);border-radius:13px;cursor:pointer;text-align:center;transition:all .2s;background:var(--surface2);position:relative;}
+.role-card:hover{border-color:#111111;transform:translateY(-2px);}
+.role-card.selected{border-color:var(--rc,#111111);background:var(--rcbg,rgba(0,0,0,.08));box-shadow:0 0 14px var(--rcgl,rgba(0,0,0,.2));}
+.role-card .rc-badge{position:absolute;top:-7px;right:-7px;width:16px;height:16px;border-radius:50%;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700;opacity:0;transition:opacity .2s;}
+.role-card.selected .rc-badge{opacity:1;}
+.role-card .rc-icon{font-size:22px;margin-bottom:5px;}
+.role-card .rc-name{font-size:11px;font-weight:700;letter-spacing:.5px;}
+.role-card .rc-desc{font-size:9px;color:var(--muted);margin-top:2px;}
+.role-card[data-role="student"] {--rc:#111111;--rcbg:rgba(0,0,0,.05);--rcgl:rgba(0,0,0,.12);}
+.role-card[data-role="staff"]{--rc:#1a4fa0;--rcbg:rgba(26,79,160,.06);--rcgl:rgba(26,79,160,.14);}
+.role-card[data-role="dean"] {--rc:#b8860b;--rcbg:rgba(184,134,11,.06);--rcgl:rgba(184,134,11,.15);}
+.role-card[data-role="student"]  .rc-badge{background:#111111;color:#ffffff;}
+.role-card[data-role="staff"] .rc-badge{background:#1a4fa0;color:#fff;}
+.role-card[data-role="dean"]  .rc-badge{background:#b8860b;color:#fff;}
+.priv-banner{border-radius:9px;padding:9px 13px;font-size:11px;margin-bottom:14px;display:none;}
+.priv-banner.staff{background:linear-gradient(135deg,rgba(26,79,160,.07),rgba(26,79,160,.03));border:1px solid rgba(26,79,160,.25);color:var(--blue);}
+.priv-banner.dean {background:linear-gradient(135deg,rgba(184,134,11,.07),rgba(184,134,11,.03));border:1px solid rgba(184,134,11,.25);color:var(--gold);}
+.field{margin-bottom:17px;}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:7px;font-family:'Space Mono',monospace;}
+.field input,.field select{width:100%;padding:13px 15px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:14px;font-family:'Syne',sans-serif;outline:none;transition:border-color .2s;}
+.field input:focus,.field select:focus{border-color:#111111;}
+.field select option{background:var(--surface2);}
+.vehicle-types{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:18px;}
+.vtype{padding:14px 10px;border:2px solid var(--border);border-radius:11px;cursor:pointer;text-align:center;transition:all .2s;background:var(--surface2);}
+.vtype:hover{border-color:#111111;}
+.vtype.selected{border-color:#111111;background:rgba(0,0,0,.08);}
+.vtype-icon{font-size:22px;margin-bottom:5px;}
+.vtype-label{font-size:12px;font-weight:600;}
+.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:5px;}
+.btn-primary{width:100%;padding:15px;background:#111111;color:#ffffff;border:none;border-radius:11px;font-size:14px;font-weight:800;font-family:'Syne',sans-serif;cursor:pointer;letter-spacing:1px;transition:transform .15s,box-shadow .15s;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.18);}
+
+/* ══════════════════════════════
+   SLOT DESCRIPTION SCREEN
+══════════════════════════════ */
+.sd-wrap{width:100%;}
+.sd-hero{padding:32px 40px 0;background:linear-gradient(180deg,#f8f8f8 0%,transparent 100%);}
+.sd-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:28px;}
+.sd-hero h1{font-size:28px;font-weight:800;margin-bottom:5px;}
+.sd-hero h1 em{color:#111111;font-style:normal;}
+.sd-hero p{color:var(--muted);font-size:13px;max-width:480px;line-height:1.6;}
+.sd-who{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px 18px;text-align:right;min-width:190px;}
+.sd-who .sw-lbl{font-size:10px;color:var(--muted);margin-bottom:3px;}
+.sd-who .sw-name{font-size:15px;font-weight:800;}
+.sd-who .sw-tag{margin-top:6px;}
+.sd-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 40px 28px;}
+.stat-box{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px;text-align:center;}
+.stat-box .sb-num{font-size:26px;font-weight:800;font-family:'Space Mono',monospace;color:#111111;}
+.stat-box .sb-label{font-size:11px;color:var(--muted);margin-top:4px;}
+.sd-zones{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 40px 24px;}
+
+/* Zone card */
+.zone-card{background:var(--surface);border:2px solid var(--border);border-radius:18px;overflow:hidden;transition:border-color .2s,transform .2s;position:relative;}
+.zone-card:hover{transform:translateY(-3px);}
+.zone-card[data-z="A"]   {--zc:#00e5a0;--zr:0,229,160;}
+.zone-card[data-z="B"]   {--zc:#0099ff;--zr:0,153,255;}
+.zone-card[data-z="C"]   {--zc:#ffd700;--zr:255,215,0;}
+.zone-card[data-z="BIKE"]{--zc:#ff6b35;--zr:255,107,53;}
+.zone-card:hover{border-color:var(--zc);}
+
+/* Zone C (Dean) — full-width gold card */
+.zone-card.dean-zone{
+  grid-column:1/-1;
+  border-color:rgba(184,134,11,.35);
+  background:linear-gradient(135deg,rgba(184,134,11,.04) 0%,var(--surface) 40%);
+  box-shadow:0 2px 20px rgba(184,134,11,.08);
+}
+.zone-card.dean-zone:hover{border-color:var(--gold);box-shadow:0 4px 20px rgba(184,134,11,.18);}
+
+.zc-head{padding:18px 22px 14px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,rgba(var(--zr),.07)0%,transparent 60%);display:flex;align-items:flex-start;justify-content:space-between;}
+.zc-letter{font-size:38px;font-weight:800;line-height:1;font-family:'Space Mono',monospace;color:var(--zc);}
+.zc-title{font-size:14px;font-weight:700;margin-top:3px;}
+.zc-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.zc-count{text-align:right;}
+.zc-num{font-size:24px;font-weight:800;font-family:'Space Mono',monospace;color:var(--zc);}
+.zc-numlabel{font-size:10px;color:var(--muted);}
+.zc-avail{margin-top:5px;font-size:10px;font-family:'Space Mono',monospace;}
+.zc-body{padding:16px 22px;}
+.zc-amenities{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.ach{display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--surface2);border:1px solid var(--border);}
+.ach .ai{font-size:12px;}
+.zc-pricing{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px;}
+.pc{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;}
+.pc .pt{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;}
+.pc .pr{font-size:13px;font-weight:800;font-family:'Space Mono',monospace;color:var(--zc);}
+.zc-slots-preview{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:12px;}
+.ms{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;font-family:'Space Mono',monospace;font-weight:700;border:1px solid;}
+.ms.mf{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.25);color:#111111;}
+.ms.mt{background:rgba(204,34,34,.08); border-color:rgba(204,34,34,.3); color:var(--taken);}
+.ms.mb{background:rgba(26,79,160,.08);border-color:rgba(26,79,160,.3);color:var(--blue);}
+.ms.mg{background:rgba(184,134,11,.1);border-color:rgba(184,134,11,.5); color:var(--gold);}
+.zc-access{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;border:1px solid var(--zc);color:var(--zc);background:rgba(var(--zr),.07);}
+
+/* Dean zone special slot previews */
+.dean-slot-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
+.dean-slot-preview{border-radius:10px;padding:12px 6px;text-align:center;border:2px solid rgba(255,215,0,.4);background:rgba(255,215,0,.06);transition:all .2s;cursor:default;}
+.dean-slot-preview .dsp-icon{font-size:20px;margin-bottom:4px;}
+.dean-slot-preview .dsp-id{font-size:9px;font-family:'Space Mono',monospace;font-weight:700;color:var(--gold);}
+.dean-slot-preview .dsp-tag{font-size:8px;color:var(--muted);margin-top:2px;}
+.dean-slot-preview.occ{border-color:rgba(255,64,96,.3);background:rgba(255,64,96,.05);}
+.dean-slot-preview.occ .dsp-icon{opacity:.5;}
+.dean-slot-preview.occ .dsp-id{color:var(--taken);}
+
+.sd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 40px 24px;}
+.sd-features{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.sd-features h3,.sd-rules-box h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.feat-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.feat-item{display:flex;align-items:flex-start;gap:9px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;}
+.feat-item .fi-icon{font-size:20px;flex-shrink:0;}
+.feat-item .fi-title{font-size:12px;font-weight:700;margin-bottom:2px;}
+.feat-item .fi-desc{font-size:10px;color:var(--muted);line-height:1.4;}
+.sd-rules-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.rule-list{display:flex;flex-direction:column;gap:9px;}
+.rule-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--muted);line-height:1.5;}
+.rule-item .ri{font-size:13px;flex-shrink:0;margin-top:1px;}
+.sd-footer{padding:20px 40px 36px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);}
+.sd-footer-note{font-size:13px;color:var(--muted);}
+.sd-footer-note strong{color:#111111;}
+.btn-proceed{padding:15px 36px;background:#111111;color:#ffffff;border:none;border-radius:12px;font-size:15px;font-weight:800;font-family:'Syne',sans-serif;cursor:pointer;letter-spacing:1px;transition:transform .15s,box-shadow .15s;display:flex;align-items:center;gap:8px;}
+.btn-proceed:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.2);}
+.btn-back-sd{padding:14px 22px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:11px;font-size:13px;cursor:pointer;font-family:'Syne',sans-serif;transition:all .2s;}
+.btn-back-sd:hover{border-color:#111111;color:#111111;}
+
+/* ══════════════════════════════
+   BOOKING SCREEN — LOT GRID
+══════════════════════════════ */
+#booking-screen.active{display:block;}
+.booking-hero{padding:28px 40px;border-bottom:1px solid var(--border);background:linear-gradient(to right,#f8f8f8,transparent);}
+.booking-hero h1{font-size:24px;font-weight:800;margin-bottom:4px;}
+.booking-hero p{color:var(--muted);font-size:13px;}
+.booking-meta{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;}
+.meta-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:11px;font-family:'Space Mono',monospace;color:#111111;}
+.booking-layout{display:grid;grid-template-columns:1fr 320px;min-height:calc(100vh - 160px);}
+.lot-section{padding:24px 40px;}
+
+/* Zone sub-section header inside lot */
+.zone-sub-header{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 16px;border-radius:10px;margin-bottom:8px;
+  font-family:'Space Mono',monospace;font-size:12px;font-weight:700;
+  border:1px solid;
+}
+.zone-sub-header.zh-a {background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.2);color:#111111;}
+.zone-sub-header.zh-b {background:rgba(26,79,160,.05);border-color:rgba(26,79,160,.25);color:var(--blue);}
+.zone-sub-header.zh-c {background:rgba(184,134,11,.06); border-color:rgba(184,134,11,.3);color:var(--gold);}
+.zone-sub-header .zh-name{font-size:14px;font-weight:800;letter-spacing:2px;}
+.zone-sub-header .zh-desc{font-size:10px;opacity:.8;}
+.zone-sub-header .zh-badge{margin-left:auto;font-size:10px;padding:3px 10px;border-radius:20px;border:1px solid currentColor;opacity:.8;}
+
+.lot-block{margin-bottom:20px;}
+.lot-grid-label{display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);font-weight:700;}
+.road-divider{height:22px;background:repeating-linear-gradient(90deg,#e0e0e0 0,#e0e0e0 20px,#ececec 20px,#ececec 40px);border-radius:4px;display:flex;align-items:center;padding:0 10px;font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;font-family:'Space Mono',monospace;margin-bottom:6px;}
+
+/* Standard A/B grid */
+.lot-grid-ab{display:grid;grid-template-columns:28px repeat(10,1fr);gap:5px;max-width:700px;margin-bottom:6px;}
+
+/* Dean C grid — 5 wide, larger slots */
+.lot-grid-c{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:500px;margin-bottom:6px;}
+
+/* Slots */
+.slot{border-radius:7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;font-family:'Space Mono',monospace;font-weight:700;border:2px solid transparent;transition:all .2s;position:relative;overflow:hidden;}
+.lot-grid-ab .slot{aspect-ratio:1;}
+.lot-grid-c  .slot{padding:12px 6px;aspect-ratio:unset;}
+.lot-grid-c  .slot .slot-icon{font-size:22px;margin-bottom:4px;}
+.lot-grid-c  .slot .slot-num {font-size:10px;}
+
+.slot::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.04)0%,transparent 50%);pointer-events:none;}
+.slot.free    {background:rgba(0,0,0,.04); border-color:rgba(0,0,0,.25); color:#111111;}
+.slot.free:hover{background:rgba(0,0,0,.1);border-color:#111111;transform:scale(1.06);z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.15);}
+.slot.taken   {background:rgba(255,64,96,.08);border-color:rgba(255,64,96,.2);color:var(--taken);cursor:not-allowed;}
+.slot.selected{background:#111111;border-color:#111111;color:#ffffff;transform:scale(1.06);box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:2;}
+
+/* Dean VIP slot */
+.slot.vip{background:rgba(184,134,11,.08);border-color:rgba(184,134,11,.5);color:var(--gold);}
+.slot.vip:hover{background:rgba(184,134,11,.15);border-color:var(--gold);transform:scale(1.06);box-shadow:0 3px 12px rgba(184,134,11,.2);}
+.slot.vip.selected{background:var(--gold);border-color:var(--gold);color:#fff;box-shadow:0 4px 14px rgba(184,134,11,.3);}
+
+/* Role-blocked slot */
+.slot.blocked{
+  background:rgba(0,0,0,.02);border-color:rgba(0,0,0,.08);
+  color:rgba(0,0,0,.2);cursor:not-allowed;
+}
+.slot.blocked::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,.04)4px,rgba(0,0,0,.04)5px);
+  border-radius:5px;pointer-events:none;
+}
+.slot.blocked:hover{border-color:rgba(0,0,0,.25);box-shadow:0 2px 6px rgba(0,0,0,.08);}
+.slot-num{font-size:8px;opacity:.7;}
+.slot-icon{font-size:13px;}
+
+/* Zone label column cell */
+.zlc{display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);font-weight:700;}
+
+/* Access matrix */
+.access-matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);}
+.am-cell{text-align:center;padding:8px 6px;border-radius:8px;font-size:10px;font-family:'Space Mono',monospace;}
+.am-cell .am-icon{font-size:18px;margin-bottom:4px;}
+.am-cell .am-label{font-weight:700;margin-bottom:3px;display:block;}
+.am-cell .am-zones{color:var(--muted);line-height:1.5;}
+.am-cell.am-student {background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.15);}
+.am-cell.am-staff{background:rgba(26,79,160,.06);border:1px solid rgba(26,79,160,.2);}
+.am-cell.am-dean {background:rgba(184,134,11,.06); border:1px solid rgba(184,134,11,.2);}
+.am-cell.am-active{transform:scale(1.05);box-shadow:0 2px 12px rgba(0,0,0,.15);}
+.am-cell.am-active.am-dean{box-shadow:0 2px 10px rgba(184,134,11,.2);}
+.am-cell.am-active.am-staff{box-shadow:0 2px 10px rgba(26,79,160,.18);}
+
+.legend{display:flex;gap:14px;margin-bottom:16px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);}
+.legend-dot{width:11px;height:11px;border-radius:3px;}
+
+/* Sidebar */
+.sidebar{border-left:1px solid var(--border);padding:24px 20px;background:var(--surface);position:sticky;top:0;height:fit-content;}
+.sidebar h2{font-size:15px;font-weight:700;margin-bottom:16px;}
+.summary-block{background:var(--surface2);border:1px solid var(--border);border-radius:13px;padding:14px;margin-bottom:12px;}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.summary-row:last-child{border-bottom:none;}
+.summary-row .label{color:var(--muted);}
+.summary-row .value{font-weight:700;font-family:'Space Mono',monospace;font-size:11px;}
+.summary-row .value.accent{color:#111111;font-weight:900;}
+.summary-row .value.gold{color:var(--gold);}
+.slot-preview{text-align:center;padding:14px 0;}
+.big-slot{width:68px;height:68px;margin:0 auto 9px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:26px;}
+.big-slot.bs-normal{background:rgba(0,0,0,.07);border:2px solid #111111;}
+.big-slot.bs-vip   {background:rgba(184,134,11,.1); border:2px solid var(--gold);}
+.slot-name{font-size:22px;font-weight:800;font-family:'Space Mono',monospace;}
+.slot-name.sn-vip{color:var(--gold);}
+.slot-desc{font-size:11px;color:var(--muted);margin-top:3px;}
+.no-slot{text-align:center;padding:22px 0;color:var(--muted);font-size:12px;}
+.no-slot .icon{font-size:30px;margin-bottom:8px;}
+.price-tag{border-radius:13px;padding:14px;margin-bottom:12px;text-align:center;}
+.price-tag.pt-normal{background:linear-gradient(135deg,rgba(0,0,0,.05),rgba(0,0,0,.03));border:1px solid rgba(0,0,0,.15);}
+.price-tag.pt-vip   {background:linear-gradient(135deg,rgba(184,134,11,.08),rgba(184,134,11,.04));border:1px solid rgba(184,134,11,.3);}
+.price-tag .amount{font-size:30px;font-weight:800;font-family:'Space Mono',monospace;color:#111111;}
+.price-tag.pt-vip .amount{color:var(--gold);}
+.price-tag .per{font-size:11px;color:var(--muted);}
+.btn-confirm{width:100%;padding:13px;background:#111111;color:#ffffff;border:none;border-radius:11px;font-size:13px;font-weight:800;font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;margin-bottom:8px;}
+.btn-confirm:hover{box-shadow:0 6px 20px rgba(0,0,0,.2);transform:translateY(-2px);}
+.btn-confirm:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-logout{width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:9px;font-size:12px;cursor:pointer;font-family:'Syne',sans-serif;transition:all .2s;}
+.btn-logout:hover{border-color:#cc2222;color:#cc2222;}
+
+/* ══════════════════════════════
+   CONFIRM SCREEN
+══════════════════════════════ */
+.confirm-card{width:470px;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:44px 38px;text-align:center;position:relative;overflow:hidden;}
+.confirm-card::before{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.04)0%,transparent 70%);pointer-events:none;}
+.confirm-icon{font-size:56px;margin-bottom:14px;animation:bounce .6s ease;}
+@keyframes bounce{0%{transform:scale(0);}60%{transform:scale(1.2);}100%{transform:scale(1);}}
+.confirm-card h1{font-size:26px;font-weight:800;margin-bottom:7px;}
+.confirm-card h1 em{color:#111111;font-style:normal;text-decoration:underline;}
+.confirm-card p{color:var(--muted);font-size:13px;margin-bottom:26px;}
+.ticket{background:var(--surface2);border:1px dashed var(--border);border-radius:14px;padding:20px;margin-bottom:22px;text-align:left;}
+.ticket.vip-ticket{border-color:rgba(255,215,0,.35);background:linear-gradient(135deg,rgba(255,215,0,.05),var(--surface2));}
+.ticket-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px dashed var(--border);}
+.ticket-id{font-family:'Space Mono',monospace;font-size:10px;color:#111111;background:rgba(0,0,0,.07);padding:4px 10px;border-radius:20px;}
+.ticket-id.vip-id{color:var(--gold);background:rgba(184,134,11,.1);}
+.ticket-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;}
+.ticket-row .tl{color:var(--muted);}
+.ticket-row .tv{font-weight:700;font-family:'Space Mono',monospace;}
+.action-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.btn-sec{padding:13px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:9px;font-size:12px;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;}
+.btn-sec:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* ── ACTIVE ROLE ZONE HIGHLIGHT ── */
+.zone-card.active-zone{
+  border-width:3px;
+  box-shadow:0 4px 24px rgba(0,0,0,.15);
+  transform:translateY(-4px);
+}
+.zone-card.active-zone::after{
+  content:'YOUR ZONE';
+  position:absolute;top:12px;right:12px;
+  background:#111111;color:#fff;
+  font-size:9px;font-weight:800;letter-spacing:1.5px;
+  font-family:'Space Mono',monospace;
+  padding:4px 10px;border-radius:20px;
+}
+.zone-card[data-z="A"].active-zone{ border-color:#111111; }
+.zone-card[data-z="B"].active-zone{ border-color:var(--blue); }
+.zone-card[data-z="C"].active-zone{ border-color:var(--gold); box-shadow:0 4px 24px rgba(184,134,11,.2); }
+.zone-card[data-z="C"].active-zone::after{ background:var(--gold);color:#fff; }
+.zone-card[data-z="B"].active-zone::after{ background:var(--blue); }
+
+.zone-card.inactive-zone{
+  opacity:0.45;
+  filter:grayscale(40%);
+}
+.zone-card.inactive-zone:hover{
+  opacity:0.7;
+  filter:grayscale(20%);
+  transform:none;
+}
+
+/* Role highlight banner inside sd-who card */
+.sd-who{transition:all .3s;}
+.sd-who.role-student{ border-color:rgba(0,0,0,.3);background:#f5f5f5;box-shadow:0 2px 12px rgba(0,0,0,.1); }
+.sd-who.role-staff  { border-color:rgba(26,79,160,.4);background:rgba(26,79,160,.04);box-shadow:0 2px 12px rgba(26,79,160,.12); }
+.sd-who.role-dean   { border-color:rgba(184,134,11,.45);background:rgba(184,134,11,.05);box-shadow:0 2px 12px rgba(184,134,11,.15); }
+
+/* ── ZONE A RANDOM ALLOTMENT UI ── */
+.zone-a-allot-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:linear-gradient(135deg,rgba(0,0,0,.04),rgba(0,0,0,.02));
+  border:1px solid rgba(0,0,0,.15);
+  border-radius:12px;padding:14px 18px;margin-bottom:10px;
+  max-width:700px;
+}
+.aab-left{display:flex;align-items:center;gap:12px;}
+.aab-icon{font-size:28px;}
+.aab-title{font-size:13px;font-weight:800;color:#111111;margin-bottom:2px;}
+.aab-sub{font-size:11px;color:var(--muted);}
+.aab-slot{
+  font-family:'Space Mono',monospace;font-size:22px;font-weight:800;
+  color:#111111;background:rgba(0,0,0,.07);
+  border:2px solid rgba(0,0,0,.3);border-radius:10px;
+  padding:8px 16px;white-space:nowrap;
+  transition:transform .2s;
+}
+.aab-slot.badge-flash{animation:badgeFlash .4s ease;}
+@keyframes badgeFlash{0%{transform:scale(1);}50%{transform:scale(1.25);background:rgba(0,0,0,.15);}100%{transform:scale(1);}}
+
+.btn-rerandom{
+  display:flex;align-items:center;gap:7px;
+  padding:9px 16px;background:var(--surface2);
+  border:1px solid rgba(0,0,0,.2);border-radius:9px;
+  color:#111111;font-size:12px;font-weight:700;font-family:'Syne',sans-serif;
+  cursor:pointer;transition:all .2s;margin-bottom:12px;
+}
+.btn-rerandom:hover{background:rgba(0,0,0,.07);border-color:#111111;transform:translateY(-1px);}
+
+/* ZONE FULL MESSAGE */
+.zone-full-msg{
+  max-width:700px;
+  background:linear-gradient(135deg,rgba(255,64,96,.07),rgba(255,107,53,.04));
+  border:2px solid rgba(255,64,96,.3);
+  border-radius:16px;padding:32px 24px;
+  text-align:center;margin-bottom:12px;
+}
+.zfm-icon{font-size:52px;margin-bottom:12px;animation:shake .4s ease;}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+.zfm-title{font-size:22px;font-weight:800;color:var(--taken);margin-bottom:8px;}
+.zfm-sub{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;}
+.zfm-count{
+  display:inline-block;
+  font-family:'Space Mono',monospace;font-size:14px;font-weight:700;
+  color:var(--taken);background:rgba(255,64,96,.1);
+  border:1px solid rgba(255,64,96,.3);border-radius:20px;padding:6px 18px;
+}
+
+/* Toast */
+.toast{position:fixed;bottom:28px;right:28px;z-index:999;background:var(--surface);border:1px solid #111111;border-radius:11px;padding:12px 18px;font-size:13px;display:flex;align-items:center;gap:9px;transform:translateY(80px);opacity:0;transition:all .3s;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:320px;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+@media(max-width:900px){
+  .booking-layout{grid-template-columns:1fr;}
+  .sidebar{border-left:none;border-top:1px solid var(--border);position:static;}
+  .lot-grid-ab{grid-template-columns:24px repeat(6,1fr);}
+  .lot-grid-c{grid-template-columns:repeat(3,1fr);}
+  .sd-zones{grid-template-columns:1fr;padding:0 20px 20px;}
+  .sd-stats{grid-template-columns:1fr 1fr;padding:0 20px 20px;}
+  .sd-bottom{grid-template-columns:1fr;padding:0 20px 20px;}
+  .sd-hero{padding:24px 20px 0;}
+  .sd-footer,.booking-hero,.lot-section,.app-header{padding-left:20px;padding-right:20px;}
+  .login-card,.confirm-card{width:95vw;padding:32px 22px;}
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"><span id="toast-icon">✓</span><span id="toast-msg">Done</span></div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 1 — LOGIN
+═══════════════════════════════════════ -->
+<div class="screen active" id="login-screen">
+<div class="login-card">
+  <div class="login-title">Park<em>IQ</em></div>
+  <div class="login-sub">Smart Parking System — Sign in to continue</div>
+  <div class="role-label">I am logging in as</div>
+  <div class="role-grid">
+    <div class="role-card selected" data-role="student" onclick="selectRole(this,'student')">
+      <div class="rc-badge">✓</div><div class="rc-icon">👤</div>
+      <div class="rc-name">Student</div><div class="rc-desc">Student / Visitor</div>
+    </div>
+    <div class="role-card" data-role="staff" onclick="selectRole(this,'staff')">
+      <div class="rc-badge">✓</div><div class="rc-icon">🧑‍💼</div>
+      <div class="rc-name">Staff</div><div class="rc-desc">Faculty / Employee</div>
+    </div>
+    <div class="role-card" data-role="dean" onclick="selectRole(this,'dean')">
+      <div class="rc-badge">✓</div><div class="rc-icon">🎓</div>
+      <div class="rc-name">Dean</div><div class="rc-desc">Dean / Director</div>
+    </div>
+  </div>
+  <div class="priv-banner staff" id="staff-banner">ℹ️ Staff get exclusive <strong>Zone B</strong> — covered parking completely <strong>FREE</strong>.</div>
+  <div class="priv-banner dean"  id="dean-banner"> ⭐ Dean gets exclusive <strong>Zone C</strong> — a fully private, complimentary VIP parking area.</div>
+  <div class="field">
+    <label>Full Name</label>
+    <input type="text" id="student-name" placeholder="e.g. Arjun Sharma"/>
+  </div>
+  <div class="field">
+    <label id="id-lbl">Student ID <span style="color:var(--muted);font-size:9px;">(optional)</span></label>
+    <input type="text" id="student-id" placeholder="e.g. STU-2023"/>
+  </div>
+  <div class="field">
+    <label>Vehicle Number</label>
+    <input type="text" id="vehicle-num" placeholder="e.g. RJ 19 AB 1234" style="text-transform:uppercase;"/>
+  </div>
+  <div class="field">
+    <label>Vehicle Type</label>
+    <div class="vehicle-types">
+      <div class="vtype selected" data-type="car"   onclick="selectVehicle(this,'car')">  <div class="vtype-icon">🚗</div><div class="vtype-label">Car</div></div>
+      <div class="vtype"          data-type="bike"  onclick="selectVehicle(this,'bike')"> <div class="vtype-icon">🏍️</div><div class="vtype-label">Bike</div></div>
+      <div class="vtype"          data-type="truck" onclick="selectVehicle(this,'truck')"><div class="vtype-icon">🚛</div><div class="vtype-label">Truck / SUV</div></div>
+      <div class="vtype"          data-type="ev"    onclick="selectVehicle(this,'ev')">   <div class="vtype-icon">⚡</div><div class="vtype-label">EV / Hybrid</div></div>
+    </div>
+  </div>
+  <div class="field">
+    <label>Booking Duration</label>
+    <div class="time-grid">
+      <select id="hours-select">
+        <option value="1">1 Hour</option><option value="2">2 Hours</option>
+        <option value="3">3 Hours</option><option value="4">4 Hours</option>
+        <option value="6">6 Hours</option><option value="8">8 Hours</option>
+        <option value="12">12 Hours</option><option value="24">Full Day</option>
+      </select>
+      <select id="from-select">
+        <option value="now">From Now</option>
+        <option value="08:00">08:00 AM</option><option value="09:00">09:00 AM</option>
+        <option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option>
+        <option value="12:00">12:00 PM</option><option value="13:00">01:00 PM</option>
+        <option value="14:00">02:00 PM</option><option value="15:00">03:00 PM</option>
+        <option value="16:00">04:00 PM</option><option value="17:00">05:00 PM</option>
+        <option value="18:00">06:00 PM</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn-primary" onclick="doLogin()">View Slot Details →</button>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 2 — SLOT DESCRIPTION
+═══════════════════════════════════════ -->
+<div class="screen" id="slotdesc-screen">
+<div class="sd-wrap">
+  <div class="app-header">
+    <div class="logo">Park<span>IQ</span></div>
+    <div class="progress-bar">
+      <div class="pb-step done">1</div><div class="pb-line done"></div>
+      <div class="pb-step active">2</div><div class="pb-line"></div>
+      <div class="pb-step">3</div><div class="pb-line"></div>
+      <div class="pb-step">4</div>
+      <span style="margin-left:6px;">Step 2 of 4 — Slot Info</span>
+    </div>
+    <div class="student-badge">
+      <div class="dot"></div><strong id="sd-header-name">—</strong>
+      <span class="role-tag student" id="sd-header-role">👤 Student</span>
+    </div>
+  </div>
+
+  <div class="sd-hero">
+    <div class="sd-hero-row">
+      <div>
+        <h1>Parking Lot <em>Overview</em></h1>
+        <p>Three dedicated zones — Zone A for Students, Zone B for Staff, and Zone C exclusively for Dean. Each zone is fully independent with its own access, amenities and pricing.</p>
+      </div>
+      <div class="sd-who" id="sd-who-card">
+        <div class="sw-lbl">Logged in as</div>
+        <div class="sw-name" id="sd-who-name">—</div>
+        <div class="sw-tag"><span class="role-tag student" id="sd-who-tag">👤 Student</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sd-stats">
+    <div class="stat-box"><div class="sb-num">50</div><div class="sb-label">Total Slots</div></div>
+    <div class="stat-box"><div class="sb-num" id="sd-free" style="color:#111111">—</div><div class="sb-label">Your Available</div></div>
+    <div class="stat-box"><div class="sb-num" id="sd-occ" style="color:var(--taken)">—</div><div class="sb-label">Occupied</div></div>
+    <div class="stat-box"><div class="sb-num" id="sd-res" style="color:var(--gold)">10</div><div class="sb-label">Dean VIP Slots</div></div>
+  </div>
+
+  <!-- Zone Cards -->
+  <div class="sd-zones">
+
+    <!-- ZONE A — USERS -->
+    <div class="zone-card" data-z="A">
+      <div class="zc-head">
+        <div><div class="zc-letter">A</div><div class="zc-title">Zone A — Student Parking</div><div class="zc-sub">Level B1 · Rows A01–A20 · Students Only</div></div>
+        <div class="zc-count"><div class="zc-num">20</div><div class="zc-numlabel">Slots</div><div class="zc-avail" style="color:#111111" id="za-avail">— available</div></div>
+      </div>
+      <div class="zc-body">
+        <div class="zc-amenities">
+          <div class="ach"><span class="ai">🔒</span> CCTV</div><div class="ach"><span class="ai">💡</span> 24hr Lighting</div>
+          <div class="ach"><span class="ai">🚶</span> Walk-to-campus</div><div class="ach"><span class="ai">♿</span> Accessible</div>
+        </div>
+        <div class="zc-pricing">
+          <div class="pc"><span class="pt">🚗 Car</span>  <span class="pr" id="zap-car">₹50/hr</span></div>
+          <div class="pc"><span class="pt">🏍️ Bike</span> <span class="pr" id="zap-bike">₹20/hr</span></div>
+          <div class="pc"><span class="pt">🚛 Truck</span><span class="pr" id="zap-truck">₹80/hr</span></div>
+          <div class="pc"><span class="pt">⚡ EV</span>   <span class="pr" id="zap-ev">₹40/hr</span></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Slot preview (A01–A10):</div>
+        <div class="zc-slots-preview" id="za-preview"></div>
+        <div class="zc-access" id="za-access">👤 Students Only — Staff &amp; Dean Restricted</div>
+      </div>
+    </div>
+
+    <!-- ZONE B — STAFF -->
+    <div class="zone-card" data-z="B">
+      <div class="zc-head">
+        <div><div class="zc-letter">B</div><div class="zc-title">Zone B — Staff Parking</div><div class="zc-sub">Level B1 · Rows B01–B20 · Staff Only</div></div>
+        <div class="zc-count"><div class="zc-num">20</div><div class="zc-numlabel">Slots</div><div class="zc-avail" style="color:var(--blue)" id="zb-avail">— available</div></div>
+      </div>
+      <div class="zc-body">
+        <div class="zc-amenities">
+          <div class="ach"><span class="ai">🔒</span> CCTV</div><div class="ach"><span class="ai">🚪</span> Covered</div>
+          <div class="ach"><span class="ai">🚿</span> Car Wash</div><div class="ach"><span class="ai">📶</span> Wi-Fi</div>
+        </div>
+        <div class="zc-pricing">
+          <div class="pc"><span class="pt">🚗 Car</span>  <span class="pr" id="zbp-car" style="color:var(--blue);">FREE</span></div>
+          <div class="pc"><span class="pt">🏍️ Bike</span> <span class="pr" id="zbp-bike" style="color:var(--blue);">FREE</span></div>
+          <div class="pc"><span class="pt">🚛 Truck</span><span class="pr" id="zbp-truck" style="color:var(--blue);">FREE</span></div>
+          <div class="pc"><span class="pt">⚡ EV</span>   <span class="pr" id="zbp-ev" style="color:var(--blue);">FREE</span></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Slot preview (B01–B10):</div>
+        <div class="zc-slots-preview" id="zb-preview"></div>
+        <div class="zc-access" style="--zc:#0099ff;--zr:0,153,255;" id="zb-access">🧑‍💼 Staff Only — Students &amp; Dean Restricted</div>
+      </div>
+    </div>
+
+    <!-- ZONE C — DEAN (full-width, gold) -->
+    <div class="zone-card dean-zone" data-z="C">
+      <div class="zc-head">
+        <div>
+          <div class="zc-letter" style="font-size:34px;display:flex;align-items:center;gap:10px;">C <span style="font-size:20px;">⭐</span></div>
+          <div class="zc-title">Zone C — Dean's Exclusive Zone</div>
+          <div class="zc-sub">Level P1 · Premium Block · Dean / Director Only · Fully Independent</div>
+        </div>
+        <div class="zc-count">
+          <div class="zc-num">10</div><div class="zc-numlabel">VIP Slots</div>
+          <div class="zc-avail" style="color:var(--gold)" id="zc-avail">— available</div>
+        </div>
+      </div>
+      <div class="zc-body">
+        <div class="zc-amenities">
+          <div class="ach"><span class="ai">⭐</span> Premium Covered</div>
+          <div class="ach"><span class="ai">🛡️</span> Dedicated Security Guard</div>
+          <div class="ach"><span class="ai">🏆</span> Priority Entry Gate</div>
+          <div class="ach"><span class="ai">🌂</span> Canopy &amp; Shade</div>
+          <div class="ach"><span class="ai">⚡</span> EV Fast Charger</div>
+          <div class="ach"><span class="ai">🚿</span> Premium Car Wash</div>
+          <div class="ach"><span class="ai">📹</span> 24/7 Dedicated CCTV</div>
+          <div class="ach"><span class="ai">🔑</span> Key-card Access Only</div>
+        </div>
+        <div class="zc-pricing">
+          <div class="pc"><span class="pt">All Vehicle Types</span><span class="pr" style="color:var(--gold);">FREE</span></div>
+          <div class="pc"><span class="pt">Validity</span><span class="pr" style="color:var(--gold);">Full Day</span></div>
+          <div class="pc"><span class="pt">Slots C01–C10</span><span class="pr" style="color:var(--gold);">Dean Only</span></div>
+          <div class="pc"><span class="pt">Gate Entry</span><span class="pr" style="color:var(--gold);">Gate P1</span></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">All 10 Dean VIP Slots — Zone C:</div>
+        <div class="dean-slot-grid" id="zc-dean-preview">
+          <!-- filled by JS -->
+        </div>
+        <div class="zc-access" id="zc-access" style="--zc:#ffd700;--zr:255,215,0;">🎓 Dean / Director Exclusive — No Other Role May Enter</div>
+      </div>
+    </div>
+
+  </div><!-- /sd-zones -->
+
+  <div class="sd-bottom">
+    <div class="sd-features">
+      <h3>🏗️ Facility Features</h3>
+      <div class="feat-list">
+        <div class="feat-item"><div class="fi-icon">🎥</div><div><div class="fi-title">24/7 CCTV</div><div class="fi-desc">Full lot coverage with motion recording</div></div></div>
+        <div class="feat-item"><div class="fi-icon">📱</div><div><div class="fi-title">Digital Ticketing</div><div class="fi-desc">QR entry &amp; exit at all gates</div></div></div>
+        <div class="feat-item"><div class="fi-icon">⚡</div><div><div class="fi-title">EV Charging</div><div class="fi-desc">Zone A × 4, Zone C × 2 fast chargers</div></div></div>
+        <div class="feat-item"><div class="fi-icon">🔑</div><div><div class="fi-title">Zone C Key-card</div><div class="fi-desc">Dean zone uses key-card controlled gate</div></div></div>
+        <div class="feat-item"><div class="fi-icon">🚿</div><div><div class="fi-title">Car Wash</div><div class="fi-desc">Zone B ₹150/wash · Zone C complimentary</div></div></div>
+        <div class="feat-item"><div class="fi-icon">🔔</div><div><div class="fi-title">SMS Alerts</div><div class="fi-desc">Booking confirmation &amp; reminders</div></div></div>
+      </div>
+    </div>
+    <div class="sd-rules-box">
+      <h3>📋 Zone Access Rules</h3>
+      <div class="rule-list">
+        <div class="rule-item"><span class="ri">👤</span><strong>Students</strong> may only book in Zone A (A01–A20). Zone B and Zone C are off-limits.</div>
+        <div class="rule-item"><span class="ri">🧑‍💼</span><strong>Staff</strong> may only book in Zone B (B01–B20). Zone A and Zone C are restricted.</div>
+        <div class="rule-item"><span class="ri">🎓</span><strong>Dean</strong> may only book in Zone C (C01–C10). Zone A and Zone B are blocked for Dean.</div>
+        <div class="rule-item"><span class="ri">🔒</span>Zone C is completely independent — separate gate, security, and entry system.</div>
+        <div class="rule-item"><span class="ri">⏰</span>Arrive within 15 mins of booked time or slot is auto-released.</div>
+        <div class="rule-item"><span class="ri">🚫</span>Attempting to park in another role's zone attracts ₹1000 fine.</div>
+        <div class="rule-item"><span class="ri">💳</span>All payments are digital — no cash at any gate.</div>
+        <div class="rule-item"><span class="ri">📞</span>Helpline: <strong style="color:#111111;">+91 94140 00000</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sd-footer">
+    <div>
+      <div class="sd-footer-note">Role: <strong id="sd-foot-role">—</strong> · Vehicle: <strong id="sd-foot-veh">—</strong></div>
+      <div class="sd-footer-note" style="margin-top:4px;">Duration: <strong id="sd-foot-dur">—</strong> · Your Zone: <strong id="sd-foot-zone">—</strong> · Est. cost: <strong id="sd-foot-cost">—</strong></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button class="btn-back-sd" onclick="showScreen('login-screen')">← Back</button>
+      <button class="btn-proceed" onclick="goToBooking()">Choose Your Slot →</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 3 — BOOKING / SLOT PICKER
+═══════════════════════════════════════ -->
+<div class="screen" id="booking-screen">
+  <div class="app-header">
+    <div class="logo">Park<span>IQ</span></div>
+    <div class="progress-bar">
+      <div class="pb-step done">1</div><div class="pb-line done"></div>
+      <div class="pb-step done">2</div><div class="pb-line done"></div>
+      <div class="pb-step active">3</div><div class="pb-line"></div>
+      <div class="pb-step">4</div>
+      <span style="margin-left:6px;">Step 3 of 4 — Pick Slot</span>
+    </div>
+    <div class="student-badge">
+      <div class="dot"></div><span>Welcome, <strong id="header-name">—</strong></span>
+      <span class="role-tag student" id="header-role-tag">👤 Student</span>
+    </div>
+  </div>
+
+  <div class="booking-hero">
+    <h1>Select Your Parking Slot</h1>
+    <p id="booking-hero-sub">Click any available slot in your assigned zone</p>
+    <div class="booking-meta">
+      <div class="meta-pill" id="meta-vehicle">🚗 Car</div>
+      <div class="meta-pill" id="meta-plate">— —</div>
+      <div class="meta-pill" id="meta-duration">1 hr</div>
+      <div class="meta-pill" id="meta-time">From Now</div>
+      <div class="meta-pill" id="meta-zone-pill">Zone A</div>
+    </div>
+  </div>
+
+  <div class="booking-layout">
+    <div class="lot-section">
+
+      <!-- Access Matrix -->
+      <div class="access-matrix">
+        <div class="am-cell am-student" id="am-student">
+          <div class="am-icon">👤</div><span class="am-label">Student</span>
+          <div class="am-zones">Zone A only<br>(A01–A20)</div>
+        </div>
+        <div class="am-cell am-staff" id="am-staff">
+          <div class="am-icon">🧑‍💼</div><span class="am-label">Staff</span>
+          <div class="am-zones">Zone B only<br>(B01–B20)</div>
+        </div>
+        <div class="am-cell am-dean" id="am-dean">
+          <div class="am-icon">🎓</div><span class="am-label">Dean</span>
+          <div class="am-zones">Zone C only<br>(C01–C10) ⭐</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(0,0,0,.5)"></div>Your Free Slots</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,215,0,.6)"></div>Dean VIP</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,64,96,.4)"></div>Occupied</div>
+        <div class="legend-item" id="legend-blocked"><div class="legend-dot" style="background:rgba(255,64,96,.15);background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,64,96,.2)3px,rgba(255,64,96,.2)4px)"></div>Other Role's Zone</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(0,0,0,.95)"></div>Your Selection</div>
+      </div>
+
+      <div id="lot-container"><!-- built by JS --></div>
+    </div>
+
+    <div class="sidebar">
+      <h2>Booking Summary</h2>
+      <div id="no-slot-msg" class="no-slot"><div class="icon">🅿️</div><div>No slot selected.<br>Click a slot in your zone.</div></div>
+      <div id="slot-selected-block" style="display:none">
+        <div class="slot-preview">
+          <div class="big-slot bs-normal" id="preview-icon-wrap"><span id="preview-icon">🚗</span></div>
+          <div class="slot-name" id="preview-name">—</div>
+          <div class="slot-desc" id="preview-desc">—</div>
+        </div>
+        <div class="summary-block">
+          <div class="summary-row"><span class="label">Driver</span><span class="value" id="sum-name">—</span></div>
+          <div class="summary-row"><span class="label">Role</span><span class="value" id="sum-role">—</span></div>
+          <div class="summary-row"><span class="label">Zone</span><span class="value" id="sum-zone">—</span></div>
+          <div class="summary-row"><span class="label">Vehicle</span><span class="value" id="sum-plate">—</span></div>
+          <div class="summary-row"><span class="label">Duration</span><span class="value" id="sum-duration">—</span></div>
+          <div class="summary-row"><span class="label">From</span><span class="value" id="sum-from">—</span></div>
+          <div class="summary-row"><span class="label">Slot</span><span class="value accent" id="sum-slot">—</span></div>
+        </div>
+        <div class="price-tag pt-normal" id="price-tag-box">
+          <div class="amount" id="sum-price">₹0</div>
+          <div class="per">Total estimated cost</div>
+        </div>
+        <button class="btn-confirm" id="confirm-btn" onclick="confirmBooking()" disabled>Confirm Booking ✓</button>
+      </div>
+      <button class="btn-logout" onclick="goBack()">← Back to Slot Info</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 4 — CONFIRMATION
+═══════════════════════════════════════ -->
+<div class="screen" id="confirm-screen">
+  <div class="confirm-card">
+    <div class="confirm-icon">✅</div>
+    <h1>Booking <em>Confirmed!</em></h1>
+    <p>Your slot is reserved. Show the ticket at the entry gate.</p>
+    <div class="ticket" id="ticket-box">
+      <div class="ticket-header">
+        <div style="font-size:16px;font-weight:800;" id="t-ticket-title">ParkIQ Ticket</div>
+        <div class="ticket-id" id="ticket-id">TKT-XXXXX</div>
+      </div>
+      <div class="ticket-row"><span class="tl">Name</span><span class="tv" id="t-name">—</span></div>
+      <div class="ticket-row"><span class="tl">Role</span><span class="tv" id="t-role">—</span></div>
+      <div class="ticket-row"><span class="tl">Zone</span><span class="tv" id="t-zone">—</span></div>
+      <div class="ticket-row"><span class="tl">Vehicle No.</span><span class="tv" id="t-plate">—</span></div>
+      <div class="ticket-row"><span class="tl">Slot</span><span class="tv" id="t-slot">—</span></div>
+      <div class="ticket-row"><span class="tl">Duration</span><span class="tv" id="t-dur">—</span></div>
+      <div class="ticket-row"><span class="tl">Entry From</span><span class="tv" id="t-from">—</span></div>
+      <div class="ticket-row"><span class="tl">Total</span><span class="tv" id="t-price" style="color:#111111">—</span></div>
+    </div>
+    <div class="action-btns">
+      <button class="btn-sec" onclick="newBooking()">🔄 New Booking</button>
+      <button class="btn-sec" onclick="showToast('🖨️','Printing...')">🖨️ Print Ticket</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  DATA & CONFIG
+// ══════════════════════════════════════════════
+const API = '/api';   // Base URL — change to 'http://localhost:3000/api' if running separately
+
+const state = { student:null, role:'student', studentId:'', vehicleType:'car', vehicleNum:'', hours:1, from:'now', selectedSlot:null };
+
+const baseRates    = { car:50, bike:20, truck:80, ev:40 };
+const icons        = { car:'🚗', bike:'🏍️', truck:'🚛', ev:'⚡' };
+const vehicleLabels= { car:'Car', bike:'Bike', truck:'Truck/SUV', ev:'EV/Hybrid' };
+const roleConfig   = {
+  student: { label:'Student', emoji:'👤', tagClass:'student', zone:'A', zoneName:'Zone A — Student Parking' },
+  staff:   { label:'Staff',   emoji:'🧑‍💼', tagClass:'staff',   zone:'B', zoneName:'Zone B — Staff Parking'  },
+  dean:    { label:'Dean',    emoji:'🎓', tagClass:'dean',    zone:'C', zoneName:'Zone C — VIP Dean Zone'   },
+};
+
+// ── LIVE SLOT DATA (fetched from API) ──
+let liveSlots = {};  // { slotId: { id, zone, status, booking } }
+
+function getOccupied(id) {
+  const s = liveSlots[id];
+  return s ? s.status !== 'free' : false;
+}
+
+function canBook(id) {
+  if (getOccupied(id)) return false;
+  const allowedZone = roleConfig[state.role].zone;
+  return id.startsWith(allowedZone);
+}
+
+function getRates() {
+  const r = {};
+  const isFree = (state.role === 'staff' || state.role === 'dean');
+  for (const k in baseRates) r[k] = isFree ? 0 : baseRates[k];
+  return r;
+}
+
+// ── API HELPERS ──
+async function apiFetch(path, options={}) {
+  try {
+    const res = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    return await res.json();
+  } catch(e) {
+    console.error('API error:', e);
+    return { success: false, message: 'Network error — is the server running?' };
+  }
+}
+
+// Load all live slot data from server
+async function loadSlots() {
+  const data = await apiFetch('/slots');
+  if (data.success) {
+    liveSlots = {};
+    data.slots.forEach(s => { liveSlots[s.id] = s; });
+  }
+  return data.success;
+}
+
+// Rebuild slot sets from live data
+function getZoneSlots(zone) {
+  return new Set(Object.keys(liveSlots).filter(id => id.startsWith(zone)));
+}
+
+// ══════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════
+function selectRole(el, role) {
+  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected'); state.role = role;
+  document.getElementById('staff-banner').style.display = role==='staff'?'block':'none';
+  document.getElementById('dean-banner').style.display  = role==='dean' ?'block':'none';
+  const lbl = document.getElementById('id-lbl');
+  if (role==='dean')       lbl.innerHTML='Dean ID <span style="color:var(--muted);font-size:9px;">(required)</span>';
+  else if (role==='staff') lbl.innerHTML='Employee ID <span style="color:var(--muted);font-size:9px;">(required)</span>';
+  else                     lbl.innerHTML='Student ID <span style="color:var(--muted);font-size:9px;">(optional)</span>';
+}
+
+function selectVehicle(el, type) {
+  document.querySelectorAll('.vtype').forEach(v=>v.classList.remove('selected'));
+  el.classList.add('selected'); state.vehicleType = type;
+}
+
+async function doLogin() {
+  const name  = document.getElementById('student-name').value.trim();
+  const uid   = document.getElementById('student-id').value.trim();
+  const plate = document.getElementById('vehicle-num').value.trim().toUpperCase();
+  const hours = parseInt(document.getElementById('hours-select').value);
+  const from  = document.getElementById('from-select').value;
+  if (!name)  { showToast('⚠️','Enter your name'); return; }
+  if ((state.role==='staff'||state.role==='dean') && !uid) { showToast('⚠️','ID is required for '+roleConfig[state.role].label); return; }
+  if (!plate) { showToast('⚠️','Enter vehicle number'); return; }
+  state.student=name; state.studentId=uid; state.vehicleNum=plate; state.hours=hours; state.from=from; state.selectedSlot=null;
+
+  // Load live slot data from server
+  showToast('⏳','Connecting to server...');
+  const ok = await loadSlots();
+  if (!ok) { showToast('❌','Cannot reach server. Check server is running.'); return; }
+
+  const rc = roleConfig[state.role];
+  const rates = getRates();
+
+  // Populate slot description screen
+  ['sd-header-name','sd-who-name'].forEach(id=>document.getElementById(id).textContent=name);
+  ['sd-header-role','sd-who-tag'].forEach(id=>{
+    const el=document.getElementById(id); el.textContent=rc.emoji+' '+rc.label; el.className='role-tag '+rc.tagClass;
+  });
+
+  // Stats — from live API data
+  const myZoneSlots = getZoneSlots(rc.zone);
+  const myFree = [...myZoneSlots].filter(id => !getOccupied(id)).length;
+  const totalOcc = Object.values(liveSlots).filter(s => s.status !== 'free').length;
+  document.getElementById('sd-free').textContent = myFree;
+  document.getElementById('sd-occ').textContent  = totalOcc;
+
+  // Zone previews
+  buildZonePreview('za-preview', 'A', 1, 10);
+  buildZonePreview('zb-preview', 'B', 1, 10);
+  buildDeanZonePreview();
+
+  // Zone access tags
+  document.getElementById('za-access').textContent = rc.zone==='A' ? '✅ Your Zone — You have full access' : '🚫 Students Only — You cannot book here';
+  document.getElementById('zb-access').textContent = rc.zone==='B' ? '✅ Your Zone — You have full access' : '🚫 Staff Only — You cannot book here';
+  document.getElementById('zc-access').textContent = rc.zone==='C' ? '✅ Your Exclusive Zone — Welcome!' : '🚫 Dean Exclusive — Strictly No Access';
+
+  // Zone availability counts
+  document.getElementById('za-avail').textContent = getAvailCount('A') + ' available';
+  document.getElementById('zb-avail').textContent = getAvailCount('B') + ' available';
+  document.getElementById('zc-avail').textContent = getAvailCount('C') + ' of 10 available';
+
+  // Pricing
+  ['car','bike','truck','ev'].forEach(t=>{
+    const zap=document.getElementById('zap-'+t); if(zap) zap.textContent='₹'+baseRates[t]+'/hr';
+    const zbp=document.getElementById('zbp-'+t); if(zbp) zbp.textContent='FREE';
+  });
+
+  // Footer
+  const estCost = (rc.zone==='C' || rc.zone==='B') ? 'FREE' : '₹'+(rates[state.vehicleType]*hours);
+  document.getElementById('sd-foot-role').textContent = rc.emoji+' '+rc.label;
+  document.getElementById('sd-foot-veh').textContent  = icons[state.vehicleType]+' '+vehicleLabels[state.vehicleType];
+  document.getElementById('sd-foot-dur').textContent  = hours+(hours===1?' hr':' hrs');
+  document.getElementById('sd-foot-zone').textContent = rc.zoneName;
+  document.getElementById('sd-foot-cost').textContent = estCost;
+
+  // Highlight the role's zone card on slot description screen
+  const zoneMap = { student:'A', staff:'B', dean:'C' };
+  ['A','B','C','BIKE'].forEach(z => {
+    const card = document.querySelector('.zone-card[data-z="'+z+'"]');
+    if (!card) return;
+    card.classList.remove('active-zone','inactive-zone');
+    if (z === zoneMap[state.role]) {
+      card.classList.add('active-zone');
+    } else if (z !== 'BIKE') {
+      card.classList.add('inactive-zone');
+    }
+  });
+  // Style the who-card by role
+  const whoCard = document.getElementById('sd-who-card');
+  if (whoCard) { whoCard.className = 'sd-who role-'+state.role; }
+
+  showScreen('slotdesc-screen');
+  showToast('👋','Welcome '+rc.emoji+' '+name+'! Your zone is Zone '+rc.zone+'.');
+}
+
+function buildZonePreview(cId, zone, start, end) {
+  const c = document.getElementById(cId); c.innerHTML='';
+  for (let i=start;i<=end;i++) {
+    const id = zone+String(i).padStart(2,'0');
+    const el = document.createElement('div'); el.className='ms';
+    if (getOccupied(id)) el.classList.add('mt');
+    else if (zone==='B') el.classList.add('mb');
+    else                 el.classList.add('mf');
+    el.textContent = String(i).padStart(2,'0');
+    c.appendChild(el);
+  }
+}
+
+// Availability counts from liveSlots
+function getAvailCount(zone) {
+  return Object.values(liveSlots).filter(s => s.zone===zone && s.status==='free').length;
+}
+
+function buildDeanZonePreview() {
+  const c = document.getElementById('zc-dean-preview'); c.innerHTML='';
+  zoneC_slots.forEach(id => {
+    const n = parseInt(id.slice(1));
+    const occ = zoneC_occupied.has(id);
+    const div = document.createElement('div');
+    div.className = 'dean-slot-preview' + (occ?' occ':'');
+    div.innerHTML = `<div class="dsp-icon">${occ?'🚫':'⭐'}</div><div class="dsp-id">${id}</div><div class="dsp-tag">${occ?'Occupied':'VIP Free'}</div>`;
+    c.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  BOOKING SCREEN
+// ══════════════════════════════════════════════
+function goToBooking() {
+  const rc = roleConfig[state.role];
+
+  // 1. Switch to booking screen FIRST so all elements are in the DOM
+  showScreen('booking-screen');
+
+  // 2. Reset slot state
+  state.selectedSlot = null;
+  zoneA_allotted = null;
+
+  // 3. Populate header & meta pills
+  document.getElementById('header-name').textContent = state.student;
+  const rTag = document.getElementById('header-role-tag');
+  rTag.textContent=rc.emoji+' '+rc.label; rTag.className='role-tag '+rc.tagClass;
+  document.getElementById('booking-hero-sub').textContent =
+    'Your exclusive zone is Zone '+rc.zone+' — only slots in this zone are bookable for your role.';
+  document.getElementById('meta-vehicle').textContent  = icons[state.vehicleType]+' '+vehicleLabels[state.vehicleType];
+  document.getElementById('meta-plate').textContent    = '🔢 '+state.vehicleNum;
+  document.getElementById('meta-duration').textContent = '⏱ '+state.hours+(state.hours===1?' hr':' hrs');
+  document.getElementById('meta-time').textContent     = '🕐 '+(state.from==='now'?'Right Now':state.from);
+  document.getElementById('meta-zone-pill').textContent= '📍 Zone '+rc.zone;
+
+  // 4. Populate sidebar summary
+  document.getElementById('sum-name').textContent     = state.student;
+  document.getElementById('sum-plate').textContent    = state.vehicleNum;
+  document.getElementById('sum-duration').textContent = state.hours+(state.hours===1?' Hour':' Hours');
+  document.getElementById('sum-from').textContent     = state.from==='now'?'Right Now':state.from;
+  const sR=document.getElementById('sum-role'); sR.innerHTML='';
+  const sp=document.createElement('span'); sp.className='role-tag '+rc.tagClass;
+  sp.style.fontSize='10px'; sp.textContent=rc.emoji+' '+rc.label; sR.appendChild(sp);
+  const szEl=document.getElementById('sum-zone');
+  szEl.textContent=rc.zoneName; szEl.className='value '+(rc.zone==='C'?'gold':'accent');
+
+  // 5. Reset sidebar slot display
+  document.getElementById('slot-selected-block').style.display='none';
+  document.getElementById('no-slot-msg').style.display='block';
+  document.getElementById('no-slot-msg').innerHTML='<div class="icon">🅿️</div><div>No slot selected.<br>Click a slot in your zone.</div>';
+  document.getElementById('confirm-btn').disabled=true;
+
+  // 6. Highlight active role in access matrix
+  ['student','staff','dean'].forEach(r=>{
+    const el=document.getElementById('am-'+r); if(el) el.classList.toggle('am-active',r===state.role);
+  });
+
+  // 7. Refresh slot data from server, then build the lot
+  loadSlots().then(() => buildLot());
+}
+
+function goBack() { showScreen('slotdesc-screen'); }
+
+// ── Track the auto-allotted slot for Zone A ──
+let zoneA_allotted = null;
+
+function buildLot() {
+  try {
+  const container = document.getElementById('lot-container');
+  container.innerHTML = '';
+
+  // ── ZONE A — Students: randomised auto-allotment ──
+  if (state.role === 'student') {
+    container.appendChild(buildZoneABlock());
+  } else {
+    container.appendChild(buildZoneBlock('A','ZONE A — Student Parking','zh-a','👤 Students Only',getZoneSlots('A'),10));
+  }
+
+  const roadDiv = document.createElement('div');
+  roadDiv.className='road-divider';
+  roadDiv.style.maxWidth='700px';
+  roadDiv.textContent='— — — DRIVEWAY — — —';
+  container.appendChild(roadDiv);
+
+  // ── ZONE B — Staff ──
+  container.appendChild(buildZoneBlock('B','ZONE B — Staff Parking','zh-b','🧑‍💼 Staff Only',getZoneSlots('B'),10));
+
+  // ── SEPARATOR ──
+  const sep = document.createElement('div');
+  sep.style.cssText='height:24px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);font-family:Space Mono,monospace;margin:4px 0;max-width:700px;';
+  sep.innerHTML='<div style="flex:1;height:1px;background:var(--border)"></div> INDEPENDENT ZONE BELOW <div style="flex:1;height:1px;background:var(--border)"></div>';
+  container.appendChild(sep);
+
+  // ── ZONE C — Dean ──
+  container.appendChild(buildDeanZoneBlock());
+
+  // counts
+  let free=0, bl=0;
+  container.querySelectorAll('.slot').forEach(s=>{
+    if (s.classList.contains('free')||s.classList.contains('vip')||s.classList.contains('selected')) free++;
+    else bl++;
+  });
+  document.getElementById('free-count').textContent  = free+' available to you';
+  document.getElementById('taken-count').textContent = bl+' blocked/occupied';
+  } catch(e) { console.error('buildLot error:', e); showToast('⚠️','Error: '+e.message); }
+}
+
+function buildZoneABlock() {
+  const wrap = document.createElement('div'); wrap.className='lot-block';
+  const freeSlots = Object.values(liveSlots).filter(s => s.zone==='A' && s.status==='free').map(s=>s.id);
+
+  const header = document.createElement('div');
+  header.className='zone-sub-header zh-a';
+  const freeLabel = freeSlots.length > 0 ? `🎲 ${freeSlots.length} free — Auto-Assigned` : '🚫 Zone Full';
+  header.innerHTML=`<span class="zh-name">A</span><span class="zh-desc">ZONE A — Student Parking · Random Allotment</span><span class="zh-badge">${freeLabel}</span>`;
+  wrap.appendChild(header);
+
+  if (freeSlots.length === 0) {
+    // ── ALL FULL ──
+    zoneA_allotted = null; state.selectedSlot = null;
+    document.getElementById('slot-selected-block').style.display='none';
+    document.getElementById('no-slot-msg').innerHTML='<div class="icon">🚫</div><div><strong style="color:var(--taken)">Zone A is fully occupied.</strong><br>No slots available right now.</div>';
+    document.getElementById('no-slot-msg').style.display='block';
+    document.getElementById('confirm-btn').disabled=true;
+
+    const full = document.createElement('div'); full.className='zone-full-msg';
+    full.innerHTML=`
+      <div class="zfm-icon">🅿️</div>
+      <div class="zfm-title">Zone A is Full!</div>
+      <div class="zfm-sub">All 20 slots are currently occupied.<br>Please check back later or contact the parking office.</div>
+      <div class="zfm-count">0 / 20 slots available</div>`;
+    wrap.appendChild(full);
+  } else {
+    // ── AUTO-ALLOT a random slot ──
+    const pick = freeSlots[Math.floor(Math.random() * freeSlots.length)];
+    zoneA_allotted = pick; state.selectedSlot = pick;
+
+    const banner = document.createElement('div'); banner.className='zone-a-allot-banner';
+    banner.innerHTML=`
+      <div class="aab-left">
+        <div class="aab-icon">🎲</div>
+        <div>
+          <div class="aab-title">Slot Auto-Allotted!</div>
+          <div class="aab-sub">Randomly assigned from <strong>${freeSlots.length}</strong> available slot${freeSlots.length>1?'s':''}.</div>
+        </div>
+      </div>
+      <div class="aab-slot" id="aab-slot-badge">${pick}</div>`;
+    wrap.appendChild(banner);
+
+    const reBtn = document.createElement('button');
+    reBtn.className='btn-rerandom';
+    reBtn.innerHTML='🔀 Assign Me a Different Slot';
+    reBtn.onclick = rerandomiseZoneA;
+    wrap.appendChild(reBtn);
+
+    updateSidebarForSlot(pick);
+  }
+
+  // Always render the grid
+  const ids = [...zoneA_slots];
+  for (let row=0; row<2; row++) {
+    const rowDiv = document.createElement('div'); rowDiv.className='lot-grid-ab';
+    const lbl = document.createElement('div'); lbl.className='zlc'; lbl.textContent='A';
+    rowDiv.appendChild(lbl);
+    for (let c=0;c<10;c++) rowDiv.appendChild(makeSlot(ids[row*10+c]));
+    wrap.appendChild(rowDiv);
+  }
+  return wrap;
+}
+
+function rerandomiseZoneA() {
+  if (state.selectedSlot) {
+    const old = document.getElementById('slot-'+state.selectedSlot);
+    if (old) { old.classList.remove('selected'); old.classList.add('free'); }
+  }
+  const freeSlots = Object.values(liveSlots).filter(s => s.zone==='A' && s.status==='free').map(s=>s.id);
+  if (freeSlots.length === 0) { showToast('🚫','No slots available in Zone A!'); return; }
+
+  const pick = freeSlots[Math.floor(Math.random() * freeSlots.length)];
+  zoneA_allotted = pick; state.selectedSlot = pick;
+
+  const el = document.getElementById('slot-'+pick);
+  if (el) { el.classList.remove('free'); el.classList.add('selected'); }
+
+  const badge = document.getElementById('aab-slot-badge');
+  if (badge) { badge.textContent = pick; badge.classList.add('badge-flash'); setTimeout(()=>badge.classList.remove('badge-flash'),500); }
+
+  updateSidebarForSlot(pick);
+  showToast('🎲','New slot assigned: ' + pick + '!');
+}
+
+function updateSidebarForSlot(id) {
+  const rates = getRates();
+  const price = rates[state.vehicleType] * state.hours;
+  document.getElementById('no-slot-msg').style.display='none';
+  document.getElementById('slot-selected-block').style.display='block';
+  document.getElementById('preview-icon-wrap').className='big-slot bs-normal';
+  document.getElementById('preview-icon').textContent=icons[state.vehicleType];
+  document.getElementById('preview-name').className='slot-name';
+  document.getElementById('preview-name').textContent=id;
+  document.getElementById('preview-desc').textContent='Zone A — Auto-Allotted · Level B1';
+  document.getElementById('sum-slot').textContent=id+' (Zone A — Auto-Allotted)';
+  document.getElementById('sum-price').textContent='₹'+price;
+  document.getElementById('price-tag-box').className='price-tag pt-normal';
+  document.getElementById('confirm-btn').disabled=false;
+}
+
+function buildZoneBlock(zone, title, headerCls, badge, slotsSet, cols) {
+  const wrap = document.createElement('div'); wrap.className='lot-block';
+  const header = document.createElement('div');
+  header.className='zone-sub-header '+headerCls;
+  header.innerHTML=`<span class="zh-name">${zone}</span><span class="zh-desc">${title}</span><span class="zh-badge">${badge}</span>`;
+  wrap.appendChild(header);
+  const ids = [...slotsSet];
+  for (let row=0; row<Math.ceil(ids.length/cols); row++) {
+    const rowDiv = document.createElement('div'); rowDiv.className='lot-grid-ab';
+    const lbl = document.createElement('div'); lbl.className='zlc'; lbl.textContent=zone;
+    rowDiv.appendChild(lbl);
+    for (let c=0;c<cols;c++) {
+      const idx=row*cols+c;
+      if (idx<ids.length) rowDiv.appendChild(makeSlot(ids[idx]));
+    }
+    wrap.appendChild(rowDiv);
+  }
+  return wrap;
+}
+
+function buildDeanZoneBlock() {
+  const wrap = document.createElement('div'); wrap.className='lot-block';
+
+  const header = document.createElement('div');
+  header.className='zone-sub-header zh-c';
+  header.innerHTML=`<span class="zh-name">C ⭐</span><span class="zh-desc">ZONE C — Dean's Exclusive Private Zone</span><span class="zh-badge">🎓 Dean Only · Level P1</span>`;
+  wrap.appendChild(header);
+
+  const grid = document.createElement('div'); grid.className='lot-grid-c';
+  zoneC_slots.forEach(id => grid.appendChild(makeSlot(id)));
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function makeSlot(id) {
+  const div=document.createElement('div'); div.className='slot'; div.id='slot-'+id;
+  const occ = getOccupied(id);
+  const allowed = canBook(id);
+  const isDean = id.startsWith('C');
+  const isZoneA = id.startsWith('A');
+  const isAutoAllotted = (id === zoneA_allotted);
+
+  if (occ) {
+    div.classList.add('taken');
+    div.innerHTML=`<div class="slot-icon">🚫</div><div class="slot-num">${id}</div>`;
+  } else if (!allowed) {
+    // Hard blocked — different role's zone
+    div.classList.add('blocked');
+    const roleIcon = isZoneA?'👤': id.startsWith('B')?'🧑‍💼':'🎓';
+    div.innerHTML=`<div class="slot-icon">${roleIcon}</div><div class="slot-num">${id}</div>`;
+    div.onclick=()=>showToast('🚫','Zone '+id[0]+' is not your zone! Log in as the correct role.');
+  } else if (isDean) {
+    div.classList.add('vip');
+    div.innerHTML=`<div class="slot-icon">⭐</div><div class="slot-num">${id}</div>`;
+    div.onclick=()=>selectSlot(id);
+  } else if (isZoneA) {
+    // Zone A: auto-allotted — clicking a non-allotted free slot triggers re-assign hint
+    if (isAutoAllotted) {
+      div.classList.add('selected');
+    } else {
+      div.classList.add('free');
+      div.onclick=()=>{ rerandomiseZoneA(); showToast('🎲','Slot re-assigned! Use the button to shuffle again.'); };
+    }
+    div.innerHTML=`<div class="slot-icon">${isAutoAllotted?'✅':icons[state.vehicleType]}</div><div class="slot-num">${id}</div>`;
+  } else {
+    div.classList.add('free');
+    div.innerHTML=`<div class="slot-icon">${icons[state.vehicleType]}</div><div class="slot-num">${id}</div>`;
+    div.onclick=()=>selectSlot(id);
+  }
+  return div;
+}
+
+function selectSlot(id) {
+  if (!canBook(id)) { showToast('🚫','Access denied for slot '+id); return; }
+  if (state.selectedSlot) {
+    const o=document.getElementById('slot-'+state.selectedSlot);
+    if(o){ o.classList.remove('selected'); o.classList.add(state.selectedSlot.startsWith('C')?'vip':'free'); }
+  }
+  state.selectedSlot=id;
+  const el=document.getElementById('slot-'+id); el.classList.remove('free','vip'); el.classList.add('selected');
+
+  const isDean=id.startsWith('C');
+  const rc=roleConfig[state.role];
+  const rates=getRates();
+  const isFree = isDean || state.role==='staff';
+  const price = isFree ? 0 : rates[state.vehicleType]*state.hours;
+  const priceStr = isDean ? 'FREE (VIP)' : state.role==='staff' ? 'FREE (Staff)' : '₹'+price;
+  const zoneName=rc.zoneName;
+
+  document.getElementById('no-slot-msg').style.display='none';
+  document.getElementById('slot-selected-block').style.display='block';
+
+  const iw=document.getElementById('preview-icon-wrap');
+  iw.className='big-slot '+(isDean?'bs-vip':'bs-normal');
+  document.getElementById('preview-icon').textContent=icons[state.vehicleType];
+
+  const pn=document.getElementById('preview-name');
+  pn.className='slot-name'+(isDean?' sn-vip':'');
+  pn.textContent=id;
+
+  document.getElementById('preview-desc').textContent=zoneName+' · '+id;
+  document.getElementById('sum-slot').textContent=id+' ('+zoneName+')';
+  document.getElementById('sum-price').textContent=priceStr;
+
+  const ptb=document.getElementById('price-tag-box');
+  ptb.className='price-tag '+(isDean?'pt-vip':'pt-normal');
+
+  document.getElementById('confirm-btn').disabled=false;
+  showToast(isDean?'⭐':'🅿️','Slot '+id+' selected!');
+}
+
+async function confirmBooking() {
+  if(!state.selectedSlot) return;
+  const isDean=state.selectedSlot.startsWith('C');
+  const isStaff=state.role==='staff';
+  const rates=getRates();
+  const price=(isDean||isStaff)?0:rates[state.vehicleType]*state.hours;
+  const priceStr=isDean?'FREE (VIP)':isStaff?'FREE (Staff)':'₹'+price;
+  const rc=roleConfig[state.role];
+
+  // Disable button while saving
+  const btn=document.getElementById('confirm-btn');
+  btn.disabled=true; btn.textContent='Saving...';
+
+  // POST booking to server
+  const result = await apiFetch('/bookings', {
+    method: 'POST',
+    body: JSON.stringify({
+      name:        state.student,
+      userId:      state.studentId,
+      role:        state.role,
+      vehicleType: state.vehicleType,
+      vehicleNum:  state.vehicleNum,
+      slotId:      state.selectedSlot,
+      hours:       state.hours,
+      from:        state.from,
+    })
+  });
+
+  btn.disabled=false; btn.textContent='Confirm Booking ✓';
+
+  if (!result.success) {
+    showToast('❌', result.message || 'Booking failed. Try another slot.');
+    return;
+  }
+
+  const booking = result.booking;
+  const ticketId = booking.id;
+
+  // Update liveSlots locally so grid reflects immediately
+  if (liveSlots[state.selectedSlot]) {
+    liveSlots[state.selectedSlot].status = 'booked';
+    liveSlots[state.selectedSlot].booking = ticketId;
+  }
+
+  // Style ticket
+  const tb=document.getElementById('ticket-box');
+  tb.className=isDean?'ticket vip-ticket':isStaff?'ticket vip-ticket':'ticket';
+  document.getElementById('ticket-id').className=isDean?'ticket-id vip-id':isStaff?'ticket-id vip-id':'ticket-id';
+  document.getElementById('t-ticket-title').textContent=isDean?'⭐ ParkIQ VIP Ticket':isStaff?'🧑‍💼 ParkIQ Staff Ticket':'ParkIQ Ticket';
+  document.getElementById('t-price').style.color=isDean?'var(--gold)':isStaff?'var(--blue)':'#111111';
+
+  document.getElementById('ticket-id').textContent=ticketId;
+  document.getElementById('t-name').textContent=state.student;
+  document.getElementById('t-role').textContent=rc.emoji+' '+rc.label+(state.studentId?' · '+state.studentId:'');
+  document.getElementById('t-zone').textContent=rc.zoneName;
+  document.getElementById('t-plate').textContent=state.vehicleNum;
+  document.getElementById('t-slot').textContent=state.selectedSlot;
+  document.getElementById('t-dur').textContent=state.hours+(state.hours===1?' Hour':' Hours');
+  document.getElementById('t-from').textContent=state.from==='now'?'Immediately':state.from;
+  document.getElementById('t-price').textContent=priceStr;
+  showScreen('confirm-screen');
+}
+
+function newBooking() {
+  state.selectedSlot=null; state.role='student'; state.vehicleType='car';
+  document.querySelectorAll('.vtype').forEach(v=>v.classList.remove('selected'));
+  document.querySelector('[data-type="car"]').classList.add('selected');
+  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected'));
+  document.querySelector('[data-role="student"]').classList.add('selected');
+  ['student-name','student-id','vehicle-num'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('staff-banner').style.display='none';
+  document.getElementById('dean-banner').style.display='none';
+  showScreen('login-screen');
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function showToast(icon,msg) {
+  document.getElementById('toast-icon').textContent=icon;
+  document.getElementById('toast-msg').textContent=msg;
+  const t=document.getElementById('toast'); t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+</script>
+</body>
+</html>
