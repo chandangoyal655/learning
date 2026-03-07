@@ -1,0 +1,43 @@
+.head {
+  text-align: center;
+  font-size: larger;
+  font-weight: bold;
+}
+div p {
+  color: blue;
+}
+div > p {
+  color: red;
+}
+h1 + p {
+  color: green;
+}
+h1 ~ p {
+  color: chocolate;
+}
+.box-overflo {
+  width: 200px;
+  height: 100px;
+  border: 2px solid black;
+  overflow: hidden scroll;
+}
+.box {
+  width: 150px;
+  height: 150px;
+  position: absolute;
+  color: white;
+  font-size: 20px;
+  padding: 10px;
+}
+.box1 {
+  background-color: red;
+  top: 800px;
+  left: 50px;
+  z-index: 1;
+}
+.box2 {
+  background-color: blue;
+  top: 840px;
+  left: 90px;
+  z-index: 2;
+}
